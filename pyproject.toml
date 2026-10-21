@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vistral"
+version = "0.0.0"
+description = "Validated, inspectable computer-vision pipelines composing OpenCV, Hugging Face and Supervision."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [{ name = "Mohammed Zaitoun" }]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Manufacturing",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
+# Ranges per docs/DECISIONS.md (D-003, D-004, D-007, D-016). Not installed during planning.
+dependencies = [
+    "numpy>=1.26",
+    "opencv-python-headless>=4.10,<6",
+    "supervision>=0.31,<0.32",
+    "pydantic>=2",
+    "pyyaml>=6",
+]
+
+[project.optional-dependencies]
+hf = ["torch", "torchvision", "transformers>=5,<6", "huggingface_hub"]
+video = ["torchcodec"]
+track = ["trackers"]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "pytest-benchmark",
+    "hypothesis",
+    "ruff",
+    "pyright",
+    "import-linter",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vistral"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: real (large) model checkpoints",
+    "gpu: requires a CUDA device",
+]
