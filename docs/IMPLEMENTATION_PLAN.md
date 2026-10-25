@@ -1,6 +1,6 @@
 # Implementation Plan
 
-**Status:** Proposed (2026-10-21). **Approval gate:** each milestone starts only after explicit approval. M0 (this planning set plus the repo skeleton) is the only approved work so far. **M1 is the next milestone to approve.**
+**Status:** M0 and M1 complete (2026-10-25). **Approval gate:** each milestone starts only after explicit approval. **M2 (OpenCV integration) is the next milestone to approve.**
 
 ---
 
@@ -15,7 +15,22 @@
   - `git init`
 - **Exit:** the docs are internally consistent; `pyproject.toml` parses; no implementation code exists.
 
-### M1: Core contracts and image representations
+### M1: Core contracts and image representations ✅ (complete, 2026-10-25)
+
+**Result against the acceptance criteria**
+1. ✅ A pure-NumPy pipeline runs and produces a per-stage trace (`tests/unit/test_pipeline.py`).
+2. ✅ `validate()` catches all 13 validation-time cases in the fault corpus, and every error carries a suggested fix. The 2 runtime cases are caught in check mode or by the always-on accepts check (`tests/unit/test_validation.py`).
+3. ✅ `auto_convert=True` inserts the cheapest lossless path and reports it. Lossy paths need `allow_lossy=True` (D-019).
+4. ✅ `import vistral` loads no cv2, torch, transformers, supervision, PIL or pydantic (`tests/unit/test_layering.py`). Both import-linter contracts are kept.
+5. ✅ Every built-in and test stage round-trips through JSON `get_config()` → `stage_from_config()` to an equal stage (`tests/contract/test_contracts.py`, 20 stages through `check_stage`).
+6. ✅ Core coverage is 96% (line + branch); the gate is ≥90%.
+7. ✅ `sv.Classifications` / `sv.KeyPoints` were checked, and Vistral uses its own types (D-017).
+
+**Exit:** 192 tests pass and 1 is skipped (the torch-only zero-copy test). This was checked locally on Python 3.14.5 / numpy 2.5.4 / OpenCV 5.0.0 and on the floor, Python 3.11.16 / numpy 1.26.4 / OpenCV 4.10.0. ruff, pyright and import-linter are clean. The CI workflow (`.github/workflows/ci.yml`) encodes the full matrix, but there is no GitHub remote yet, so it has not run in GitHub Actions.
+
+**Deviations from the plan:** `ToSourceCoords` and `Convert` moved forward from M2 into core (D-022). `ImageSpec` gained a `backend` field. `Accepts` is its own type (D-020). `read_image` already decodes files through OpenCV, using lazy import and `imdecode`, so non-ASCII Windows paths work.
+
+**Original plan:**
 - **Deliverables** (`vistral.core`, `vistral.testing`):
   - `ImageSpec`, `Image`, `GeoTransform`, `Frame`, `SourceInfo`
   - `Result` / `ResultMeta`, Vistral result types, and the `metadata["vistral"]` convention on `sv.Detections`

@@ -12,3 +12,5 @@ htmlcov/
 benchmarks/results/*.tmp
 .idea/
 .vscode/
+.venv-*/
+coverage.xml

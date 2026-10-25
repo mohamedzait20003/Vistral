@@ -58,14 +58,19 @@ A frozen dataclass that describes pixel data. Every field can be `None`, meaning
 
 | Field | Values | Notes |
 |---|---|---|
-| `layout` | `HWC`, `CHW`, `HW` (single channel, no channel axis) | Batches add a leading `N` |
+| `layout` | `HWC`, `CHW`, `HW` (single channel, no channel axis) | M1 batches are lists of frames; a leading `N` axis is not modeled yet |
 | `color` | `BGR`, `RGB`, `GRAY`, `BGRA`, `RGBA`, `MASK` (binary/label map) | Color order can't be inferred from the data, so it has to be declared and tracked |
 | `dtype` | `uint8`, `uint16`, `float32`, `float16`, `bool`, `int32` | |
 | `range` | `U8` (0–255), `U16` (0–65535), `UNIT` (0–1), `NORMALIZED(mean, std)`, `ANY` | Catches double normalization and 0–1 vs 0–255 confusion |
 | `device` | `cpu`, `cuda:N`, `mps` | NumPy data is always `cpu` |
+| `backend` | `numpy`, `torch` | Added in M1: a model can require tensors, and numpy↔torch is a conversion edge |
 | `size` | `(height, width)` | Always stored as **(H, W)**; never (W, H) anywhere in Vistral |
 
-Named constructors cover common cases: `ImageSpec.bgr_u8()`, `rgb_u8()`, `gray_u8()`, `rgb_unit_chw()`.
+Named constructors cover common cases: `ImageSpec.bgr_u8()`, `rgb_u8()`, `gray_u8()`, `gray_u16()`, `rgb_unit_chw()`.
+
+**Declared vs observed (as implemented).** Layout, dtype, size, device and backend are always re-derived from the data (`derive_spec`). Color and range are declared and inherited: an inherited color is dropped (becomes unknown) if the data's channel count no longer matches it, and an inherited range is dropped when the dtype changes. A 3-channel NumPy array with no declaration is assumed BGR, which is OpenCV's order.
+
+**`Accepts`** is the constraint type: a set of allowed values per field (range constrains the *kind*), plus an optional exact `size`. Its `check(spec)` returns violations and unknown fields. Violations carry hints, for example "the sizes are swapped; Vistral sizes are (height, width)" or "the data is already normalized".
 
 ### 3.2 `Image`
 Holds `data` (an `np.ndarray` or `torch.Tensor`), its `spec`, and `transforms: tuple[GeoTransform, ...]`.
@@ -81,7 +86,7 @@ Holds `data` (an `np.ndarray` or `torch.Tensor`), its `spec`, and `transforms: t
   - This differs from cv2's internal pixel-center sampling, but that sampling doesn't affect box geometry.
 - `ToSourceCoords` composes the inverses of every transform after the frame's source image and applies them to the results:
   - `sv.Detections.xyxy`: corners are transformed and re-boxed; for rotations this gives the bounding box of the rotated box, and that loss is documented.
-  - `mask`: warped with `cv2.warpPerspective`, using nearest-neighbor interpolation.
+  - `mask`: warped with `cv2.warpPerspective`, using nearest-neighbor interpolation. OpenCV samples at pixel centers, so the corner-based matrix is first conjugated by a half-pixel shift. Without that, warped masks drift by half a pixel; a test in M1 caught this.
   - Keypoints and contours: points are transformed.
   - Afterwards the result's `coord_space` metadata is set to `"source"`.
 
@@ -105,8 +110,8 @@ Frame
 | Result | Type | Notes |
 |---|---|---|
 | Detections, instance masks | **`sv.Detections`** (D-004) | Vistral metadata goes in `metadata["vistral"]` (see below). Per-detection extras go in `data`: `class_name`, `zone`, `area_mm2`, … |
-| Classification | `sv.Classifications` or `vistral.Classification` | [Q] decided in M1 after checking the sv API |
-| Keypoints / pose | `sv.KeyPoints` or `vistral.Keypoints` | [Q] M1 |
+| Classification | `vistral.Classification(class_ids, scores, labels)` | D-017: `sv.Classifications` has no labels or metadata field; `.to_supervision()` converts |
+| Keypoints / pose | `vistral.Keypoints(xy (N,K,2), confidence, class_ids)` | D-017: `sv.KeyPoints` has no metadata field; `.to_supervision()` converts. `sv.KeyPoints` inputs are still mapped by `ToSourceCoords` |
 | Semantic segmentation | `vistral.SemanticMask(label_map: HW int, id2label)` | |
 | Embedding | `vistral.Embedding(vector, model_id, normalized: bool)` | |
 | Text (captions, OCR) | `vistral.Text(text, tokens?, scores?)` | M7 |
@@ -129,20 +134,23 @@ Every Vistral result carries `meta: ResultMeta`. On `sv.Detections` the same dic
 
 ### 4.1 Protocol
 ```python
-class Stage(Protocol):
-    name: str
-    role: Role                                   # FILTER | ENCODER | MODEL | DECODER | POSTPROCESS | SINK
-    accepts: SpecConstraint | None               # None = accepts anything (unchecked)
+class Stage:                                     # base class (vistral.core.stage)
+    name: str                                    # class/function name, or with_options(name=...)
+    role: Role                                   # FILTER | ENCODER | MODEL | DECODER | POSTPROCESS | SINK | PIPELINE | CONTROL
+    accepts: Accepts | None                      # None = accepts anything (unchecked)
+    reads: str | None; writes: str | None        # artifact/result keys (role defaults)
+    changes_geometry: bool                       # records a GeoTransform (validation tracks it)
+    requires_source_coords: tuple[str, ...]      # result keys that must be in source coordinates
     def produces(self, spec: ImageSpec) -> ImageSpec   # default: identity
     def process(self, frame: Frame) -> Frame
     def process_batch(self, frames: list[Frame]) -> list[Frame]   # default: loop
     def setup(self) -> None                      # lazy resource acquisition (models)
     def close(self) -> None                      # idempotent
     def reset(self) -> None                      # stateful stages; called at stream boundaries
-    def get_config(self) -> dict                 # serializable constructor params (for YAML)
+    def get_config(self) -> dict                 # constructor params, captured automatically
 ```
 
-`SpecConstraint` is a set of allowed values per `ImageSpec` field, for example `color ∈ {BGR, GRAY}, dtype ∈ {uint8}`.
+Constructor arguments are captured automatically, including defaults, by wrapping each subclass's `__init__`. `get_config()` therefore needs no per-stage code, and `stage_from_config(get_config())` rebuilds an equal stage. Stage equality *is* config equality.
 
 ### 4.2 Roles
 The roles separate responsibilities that are often conflated:
@@ -157,7 +165,7 @@ The roles separate responsibilities that are often conflated:
 | **Postprocess** | `results[key]` → `results[key]` | `FilterDetections`, `NMS`, `ToSourceCoords`, `Measure`, `Verdict` | Decoders: postprocessors work on structured results |
 | **Sink** | `Frame` → side effect | `ImageWriter`, `JSONSink`, `CallbackSink` | Annotators, which are filters that draw on a copy |
 
-The artifact and result keys above are defaults. Every stage takes `reads=` / `writes=` overrides, which lets two models run in one pipeline (`writes="defects"`, `writes="labels"`).
+The artifact and result keys above are defaults. `stage.with_options(name=, reads=, writes=)` overrides them and is recorded in the config, which lets two models run in one pipeline (`writes="defects"`, `writes="labels"`). A `Model` with `reads = "image"` consumes `frame.image.data` directly (no Encoder); its `accepts` then describes that image.
 
 ### 4.3 How authors write stages
 1. **Function plus decorator.** For pure array operations:
@@ -178,10 +186,11 @@ Decorated functions and subclasses are the same `Stage` at runtime. Decorator pa
   - `pipeline(x)` accepts an `ndarray`, `Image`, path or `Frame` and returns the output `Frame`.
   - `pipeline.run(x, trace=True)` returns `RunResult(frame, trace)`.
 - Batches: `pipeline.map(iterable, batch_size=8)`.
-  - Consecutive stages that implement `process_batch` receive lists.
+  - A stage that overrides `process_batch` (or `Model.predict_batch`) receives lists. If a batch call raises, that batch is retried frame by frame so the failure is attributed to the right frame.
   - Other stages are looped.
   - Order is preserved.
-- Streams: `pipeline.stream(source, sinks=[...])` is a generator of Frames. `reset()` is called on stateful stages when the source changes (for example a new video file).
+- Streams: `pipeline.stream(source, sinks=[...])` is a generator of Frames. Sinks run on frames that succeeded and are closed when the stream ends. `reset()` is called on stateful stages when `frame.source.stream_id` changes (for example a new video file).
+- Every stage also gets a **runtime accepts check** before `process`. It costs one field comparison per constrained field and is always on. Unknown constrained fields fail at runtime with a fix suggestion, because Vistral cannot verify color order from pixels.
 - Lifecycle: `with pipeline:` calls `setup()` on all stages, then `close()` on exit. `setup()` also runs lazily on first use.
 
 ### 5.2 Combinators
@@ -193,24 +202,34 @@ Decorated functions and subclasses are the same `Stage` at runtime. Decorator pa
 `pipeline.validate(input_spec)` runs before any data is processed:
 
 ```
-spec := input_spec
+state := (spec=input_spec, geometry=(), result_spaces={}, artifacts={})
 for stage in stages:
-    if stage.accepts is None:            -> spec unknown downstream for unchecked fields (warning)
-    elif spec violates stage.accepts:
-        path := shortest conversion path in ConversionGraph(spec -> nearest accepted spec)
-        strict mode    -> raise SpecMismatchError(stage, spec, accepts, suggestion=path)
-        auto_convert   -> insert Convert stages for path; record in validation report
-    spec := stage.produces(spec)
+    if stage.accepts and a constrained field is unknown   -> warning (checked again at runtime)
+    if spec violates stage.accepts:
+        path := cheapest path in ConversionGraph (lossless edges; lossy only with allow_lossy)
+        auto_convert and path -> insert Convert(...) before the stage; record in report
+        otherwise             -> error SpecMismatchError(violations, suggestion)
+    stage reads an artifact nobody wrote          -> error (e.g. Model without Encoder)
+    stage reads a result nobody wrote             -> warning
+    required result not in source coordinates     -> error CoordinateSpaceError (fix: ToSourceCoords)
+    spec := stage.produces(spec); track geometry changes, written artifacts and result spaces
 ```
 
-- **ConversionGraph** nodes are spec states. Edges are registered converters, each with a cost estimate:
-  - BGR↔RGB: `cvtColor`
-  - GRAY→BGR
-  - uint8 U8 → float32 UNIT
-  - HWC↔CHW: a view or transpose
-  - numpy↔torch: `from_numpy` (zero-copy) or `.numpy()`
-  - cpu→cuda
-- **Runtime checks.** In debug mode (`VISTRAL_DEBUG=1` or `pipeline.run(check=True)`), each stage's actual output is checked against its declared spec: dtype, ndim, channel count, size and device. Values are cheap to check, but color order can't be detected at runtime. That is why it's tracked as metadata.
+`validate()` returns a `ValidationReport`: all issues, the insertions, the output spec, and `report.pipeline`, which is the original pipeline or a rebuilt one with the conversions inserted. By default the first error is raised, and every other error is attached as an exception note. `Branch` and `When` validate each branch and merge the states; branches that disagree make those fields unknown and produce a warning.
+
+- **ConversionGraph** nodes are spec states. Edges are converters with a cost and a `lossy` flag. The M1 set is NumPy-only:
+  - swap_rb (BGR↔RGB, BGRA↔RGBA)
+  - gray→BGR/RGB
+  - HW↔HWC/CHW channel views
+  - HWC↔CHW transposes (views, zero-copy)
+  - U8/U16→UNIT
+  - U8→U16
+  - f16→f32
+  - Lossy edges: drop_alpha, to_gray, UNIT→U8/U16, U16→U8, f64→f32, f32→f16
+  - The torch edges (numpy↔torch via zero-copy `from_numpy`, cpu↔cuda) are registered only when torch is installed.
+- **Normalization is never a conversion edge.** It belongs to encoders, so an image that is already `NORMALIZED` has no path into a stage that expects U8. That is how double normalization gets caught.
+- **Suggestions.** Every error carries a fix: the exact `vistral.Convert(...)` call, a lossy alternative with `allow_lossy=True`, or a hint from the violation.
+- **Runtime check mode.** With `VISTRAL_DEBUG=1`, `run(check=True)` or `Pipeline(check=True)`, each stage's output is compared with both its declared `produces()` spec and the data itself (dtype, channels, layout, value range for UNIT). Values are cheap to check, but color order can't be detected at runtime, which is why it's tracked as metadata.
 - **HF encoders** declare `accepts = RGB, uint8, HWC` and record `size` so the decoder can supply `target_sizes` (H, W).
 
 ### 5.4 Conversions and copies
@@ -225,6 +244,7 @@ for stage in stages:
 ```
 VistralError
  ├─ SpecMismatchError        (validation; includes suggested fix)
+ │   └─ CoordinateSpaceError (result in the wrong coordinate space)
  ├─ ConversionError
  ├─ StageError               (wraps any exception: stage name/index, input spec, frame source; __cause__ preserved)
  ├─ ModelOutputError         (decoder received malformed/unexpected outputs)
@@ -234,12 +254,14 @@ VistralError
 `on_error` controls what happens when a stage fails:
 - `"raise"` (default) stops the pipeline.
 - `"skip"` attaches a `StageFailure` to `frame.errors`, skips the remaining stages for that frame and continues with the next frame.
-- `"collect"` does the same and also returns all failures at the end of `map`/`stream`.
+- `"collect"` does the same and also appends each failure to `pipeline.failures`, which is reset at the start of every `run`/`map`/`stream`.
+
+`SpecMismatchError` and `StageError` from inner stages propagate unchanged. Any other exception is wrapped in `StageError`, with `__cause__` set to the original.
 
 ### 5.6 Trace (observability)
 Each stage produces a `TraceRecord`:
 - name, role
-- wall time in ns (with `cuda.synchronize` when the stage reports GPU work and `trace(sync_cuda=True)`)
+- wall time in ns (CUDA synchronization for GPU stages arrives with M3)
 - input and output spec
 - conversions (count, copied bytes)
 - new allocations (output `nbytes` when the buffer isn't shared with the input)
@@ -284,7 +306,8 @@ Available as `trace.table()` (text), `trace.to_dict()` and `trace.to_json()`. Wi
 src/vistral/
   __init__.py          # public re-exports (Pipeline, Branch, When, ImageSpec, read_image, decorators, ...)
   core/   spec.py image.py frame.py geometry.py stage.py pipeline.py combinators.py
-          results.py convert.py trace.py errors.py
+          results.py convert.py trace.py errors.py config.py validation.py
+          ops.py (Convert, ToSourceCoords)                       # M1 — implemented
   cv/     color.py geometry.py filters.py intensity.py morphology.py edges.py analysis.py
           draw.py wrap.py
   qc/     roi.py tiled.py measure.py verdict.py reference.py calibration.py

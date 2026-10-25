@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --extra dev --python 3.14
+      - run: uv run --no-sync ruff check src tests
+      - run: uv run --no-sync ruff format --check src tests
+      - run: uv run --no-sync pyright
+      - run: uv run --no-sync lint-imports
+
+  test:
+    name: test (${{ matrix.os }}, py${{ matrix.python }}, ${{ matrix.deps }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.14"]
+        deps: [latest]
+        include:
+          # Supported floor (D-003, D-016): oldest numpy / OpenCV / Supervision.
+          - { os: ubuntu-latest, python: "3.11", deps: floor }
+          - { os: windows-latest, python: "3.11", deps: floor }
+          # Latest OpenCV 4.x line alongside the 5.x default.
+          - { os: ubuntu-latest, python: "3.12", deps: opencv4 }
+          - { os: ubuntu-latest, python: "3.13", deps: latest }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --extra dev --python ${{ matrix.python }}
+      - name: Pin floor dependencies
+        if: matrix.deps == 'floor'
+        run: uv pip install "numpy==1.26.*" "opencv-python-headless==4.10.0.84" "supervision==0.31.*"
+      - name: Pin OpenCV 4.x
+        if: matrix.deps == 'opencv4'
+        run: uv pip install "opencv-python-headless>=4.10,<5"
+      - name: Versions
+        run: uv run --no-sync python -c "import sys, numpy, cv2, supervision; print(sys.version, numpy.__version__, cv2.__version__, supervision.__version__)"
+      - name: Tests
+        run: uv run --no-sync pytest --cov=vistral --cov-report=xml
+      - name: Core coverage gate (>= 90%)
+        run: uv run --no-sync coverage report --include="src/vistral/core/*" --fail-under=90

@@ -10,7 +10,9 @@
 | R2 | **Supervision pre-1.0 churn**, now that it's a core dependency (D-004) | M | H | Pin `>=0.31,<0.32`. Keep all sv calls in a few modules. Add contract tests on the sv features Vistral uses (`Detections` fields, `from_transformers`, `with_nms`, `InferenceSlicer`, `PolygonZone`, annotators). | M1–M4 |
 | R3 | **Heavy core install** from Supervision's transitive dependencies (`av`, `matplotlib`, `scipy`) | H | M | Document the install size. If edge deployments object, check whether Supervision could make these optional upstream, or revisit D-004. | M1 |
 | R4 | **OpenCV wheel conflicts** (headless vs GUI `opencv-python` both installed) | M | M | Document the conflict. Provide a `[gui]` extra. Detect it at import time and warn. | M1 |
-| R5 | **OpenCV 4.10 vs 5.x differences** in API behavior and wheel availability (Python 3.14, numpy 2) | M | M | Use only APIs common to both versions. Run the CI matrix. Put version-specific branches in one module. | M1–M2 |
+| R5 | **OpenCV 4.10 vs 5.x differences** in API behavior and wheel availability (Python 3.14, numpy 2) | M | M | Use only APIs common to both versions. Run the CI matrix. Put version-specific branches in one module. *M1: the core suite passes on 4.10.0 and on 5.0.0.* | M1–M2 |
+| R14 | **Pixel-convention mismatches** between Vistral's corner-based coordinates and OpenCV's center-based sampling | M | H | *Found in M1:* mask warping drifted half a pixel and was fixed by conjugating with a half-pixel shift. M2 must apply the same care to every geometry built-in (resize, rotate, warp), with tests against known ground truth. | M2 |
+| R15 | **Tooling quirks on Windows/Python 3.14.** `--cov=<subpackage>` re-imports numpy ("cannot load module more than once"), and uv hit OS error 1450 under high download concurrency | L | L | Measure `--cov=vistral` and gate core with `coverage report --include`. Lower `UV_CONCURRENT_DOWNLOADS` if installs fail. | M1 |
 | R6 | **Hidden overhead.** The abstraction adds latency, copies or conversions. | M | H | Trace counters, zero-copy conversion graph, M6 benchmarks against direct baselines, published results. | M1, M6 |
 | R7 | **Spec metadata drifts from the actual data** (a custom stage declares the wrong spec) | M | M | Runtime checks in debug mode. `check_stage` verifies that declared output matches actual output. | M1 |
 | R8 | **Coordinate mapping errors** through ROI, tiling, letterbox or rotation | M | H | 3×3 transform composition, property tests (forward then inverse is the identity), ground-truth synthetic fixtures. Rotation re-boxing loss is documented. | M2, M4 |
@@ -34,8 +36,8 @@
 
 | # | Question | Default if not answered | Resolve by |
 |---|---|---|---|
-| Q1 | Are `sv.Classifications` and `sv.KeyPoints` adequate result types? (D-017) | Use them if they carry scores, labels and metadata; otherwise thin Vistral dataclasses | M1 |
-| Q2 | numpy floor: 1.26 or 2.x? (D-016) | 1.26, raised if OpenCV 4.10 wheels allow | M1 CI |
+| Q1 | ~~Are `sv.Classifications` and `sv.KeyPoints` adequate result types?~~ **Resolved in M1:** no, because neither has a metadata field. Vistral types with `.to_supervision()` are used (D-017) | — | ✅ M1 |
+| Q2 | ~~numpy floor?~~ **Resolved in M1:** `numpy>=1.26`, verified on Python 3.11 + numpy 1.26.4 + OpenCV 4.10.0 (D-016) | — | ✅ M1 |
 | Q3 | Which tiny HF checkpoints to use for CI, per task | `hf-internal-testing` tiny models where they exist | M3 |
 | Q4 | HF v5 kwarg names for channel format and model dtype | Verify against the installed v5 source | M3 |
 | Q5 | `sv.InferenceSlicer` / `sv.PolygonZone` API details for `Tiled` / `InZone` | Wrap them if they fit; otherwise implement tiling with sv NMS | M4 |

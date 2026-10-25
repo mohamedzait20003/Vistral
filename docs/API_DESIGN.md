@@ -124,7 +124,7 @@ frame.results["detections"]                          # a real sv.Detections — 
 
 ### 3.1 A function filter
 ```python
-@vt.filter(accepts=vt.ImageSpec(color={"BGR", "GRAY"}, dtype="uint8"))   # produces: same as input
+@vt.filter(accepts=vt.Accepts(color={"BGR", "GRAY"}, dtype="uint8"))   # produces: same as input
 def vignette(img: np.ndarray, strength: float = 0.5) -> np.ndarray:
     h, w = img.shape[:2]
     k = cv2.getGaussianKernel(w, w * strength) @ cv2.getGaussianKernel(h, h * strength).T
@@ -162,6 +162,7 @@ pipe = hf.Processor("org/custom") | hf.Model("org/custom", task=None) | MyKeypoi
 ### 3.5 A custom model backend (ONNX Runtime)
 ```python
 class OnnxDetector(vt.Model):
+    reads = "image"                                  # consume frame.image.data, no Encoder
     accepts = vt.ImageSpec.rgb_unit_chw()            # validator inserts BGR→RGB, u8→unit, HWC→CHW if auto_convert
     def __init__(self, path: str, providers: list[str] = ("CPUExecutionProvider",)):
         self.path, self.providers = path, list(providers)

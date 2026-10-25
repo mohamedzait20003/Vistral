@@ -7,7 +7,7 @@
 - **Proposed:** recommended in planning, and adopted unless the owner objects.
 - **Open:** still to be resolved.
 
-Last updated: 2026-10-21.
+Last updated: 2026-10-25 (M1 complete).
 
 ---
 
@@ -136,16 +136,44 @@ Last updated: 2026-10-21.
 - **Decision:** only QC-specific overlays (verdict banner, measurements) and contours are drawn with cv2 directly.
 
 ### D-016: numpy floor
-- **Status:** Open
-- **Proposal:** `numpy>=1.26`, raised to `>=2` if the OpenCV 4.10 wheels allow it. The M1 CI matrix decides.
+- **Status:** Decided (M1, 2026-10-25)
+- **Decision:** keep `numpy>=1.26`.
+- **Evidence:** the full suite passes at both ends of the supported range, run locally:
+  - Python 3.11.16, numpy 1.26.4, OpenCV 4.10.0, Supervision 0.31.2;
+  - Python 3.14.5, numpy 2.5.4, OpenCV 5.0.0, Supervision 0.31.1.
+
+  CI keeps a `floor` job so the range stays honest.
 
 ### D-017: Classification and keypoint result types
-- **Status:** Open
-- **Proposal:** use `sv.Classifications` / `sv.KeyPoints` if their APIs fit, otherwise thin Vistral dataclasses. Decided during M1.
+- **Status:** Decided (M1, 2026-10-25)
+- **Decision:** Vistral's own `Classification` and `Keypoints` dataclasses, each with `.to_supervision()`.
+- **Evidence:** in Supervision 0.31.1, `sv.Classifications` has only `class_id` and `confidence`, with no label names and no metadata field. `sv.KeyPoints` has a per-detection `data` dict but no collection-level `metadata`. Neither can carry Vistral provenance or coordinate-space metadata. `sv.Detections` keeps `metadata` through indexing, which confirms D-004.
 
 ### D-018: Packaging and tooling
-- **Status:** Proposed
-- **Decision:** `uv`, hatchling, `src/` layout, ruff, pyright, pytest. Planning docs live in `docs/`.
+- **Status:** Decided (M1)
+- **Decision:** `uv` (run as `py -m uv` on the dev machine), hatchling, `src/` layout, ruff (lint and format), pyright (basic), pytest + hypothesis + coverage, import-linter, and GitHub Actions. Planning docs live in `docs/`.
+
+### D-019: Automatic conversion uses lossless edges only
+- **Status:** Decided (M1)
+- **Decision:**
+  - `validate(auto_convert=True)` and `Convert` use only lossless converters.
+  - Lossy ones (drop alpha, to gray, bit-depth reduction, float narrowing) need `allow_lossy=True`.
+  - Normalization is never a converter; it belongs to encoders.
+- **Rationale:** silently dropping alpha or truncating a 16-bit industrial image is exactly the class of bug Vistral exists to prevent. Making normalization unconvertible is what turns double normalization into a validation error.
+
+### D-020: `Accepts` is separate from `ImageSpec`
+- **Status:** Decided (M1)
+- **Decision:** `ImageSpec` describes data (single values). `Accepts` constrains it (sets of values, plus an optional exact size). An `ImageSpec` or a dict is accepted wherever an `Accepts` is expected and is coerced.
+- **Rationale:** mixing sets into `ImageSpec` would make "what this image is" ambiguous.
+
+### D-021: Config capture by wrapping `__init__`
+- **Status:** Decided (M1)
+- **Decision:** `Stage.__init_subclass__` wraps each subclass's `__init__` to record the bound constructor arguments, including defaults. `get_config()` therefore needs no per-stage code, and stage equality is config equality. Built-ins are registered by short name. Anything else is referenced as `module:QualName` and resolved only when it matches `allow_imports`. This is the foundation for M5 recipes.
+- **Consequence:** constructor arguments must be config-serializable. Non-serializable arguments raise `ConfigError` from `get_config()`, which `check_stage` reports.
+
+### D-022: `ToSourceCoords` and `Convert` live in core
+- **Status:** Decided (M1)
+- **Decision:** both were moved forward from M2. They depend only on core types (OpenCV is imported lazily for mask warping), and the coordinate-space fault cases need them.
 
 ---
 
@@ -155,7 +183,7 @@ Last updated: 2026-10-21.
 |---|---|---|
 | A-1 | Sequential execution meets QC cycle times for typical single-camera stations | M6 benchmarks |
 | A-2 | Per-stage overhead can be kept ≤20 µs with tracing off | M6 |
-| A-3 | `sv.InferenceSlicer` accepts an arbitrary detector callback that returns `sv.Detections` | M4 |
+| A-3 | `sv.InferenceSlicer` accepts an arbitrary detector callback that returns `sv.Detections` | **Confirmed in M1:** signature `callback: Callable[[ImageType], Detections]`, plus a batch form, `slice_wh`, `overlap_wh`, `iou_threshold` (supervision 0.31.1) |
 | A-4 | HF v5 processors accept an explicit channel-format kwarg for NumPy input | M3 |
 | A-5 | Tiny HF checkpoints exist for each typed task, for CI | M3 |
 | A-6 | Most cv2 calls release the GIL (relevant to future multi-camera threading) | M7 |

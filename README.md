@@ -1,6 +1,36 @@
 # Vistral
 
-**Status: planning.** There is no implementation yet.
+**Status: M1 (core contracts) complete.** The OpenCV built-ins (M2) and Hugging Face integration (M3) are next. See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
+
+## Try M1
+
+```bash
+py -m uv sync --extra dev          # or: uv sync --extra dev
+.venv/Scripts/python examples/m1_quickstart.py   # Linux/macOS: .venv/bin/python
+.venv/Scripts/python -m pytest
+```
+
+M1 provides:
+- image specs (color order, layout, dtype, value range, device, size as (H, W));
+- stages and sequential pipelines with `Branch`/`When`;
+- **validation before execution** with suggested fixes and optional lossless auto-conversion;
+- coordinate tracking (`ToSourceCoords`);
+- per-stage tracing;
+- config round-trips;
+- a contract-test kit for your own components (`vistral.testing.check_stage`).
+
+```python
+import vistral as vt
+from vistral.testing import stubs   # stand-ins until real OpenCV/HF stages land in M2/M3
+
+pipe = vt.Pipeline([stubs.RGBModelStub()])
+pipe.validate(vt.ImageSpec.bgr_u8())
+# SpecMismatchError: stage 0 'RGBModelStub' does not accept BGR uint8 HWC U8 ...
+#   - color=BGR (allowed: {RGB})
+#   Fix: insert vistral.Convert(color='RGB') before this stage [swap_rb], ...
+```
+
+## Target API (later milestones)
 
 Vistral is a planned Python library for building **validated, inspectable computer-vision pipelines** from:
 - OpenCV operations,
@@ -11,7 +41,7 @@ Vistral is a planned Python library for building **validated, inspectable comput
 Its main focus is **industrial and production inspection and QC**.
 
 ```python
-# Target API (design only — not implemented)
+# Design only — cv, hf and qc arrive in M2–M4
 import vistral as vt
 from vistral import cv, hf, qc
 

@@ -49,9 +49,59 @@ line-length = 100
 target-version = "py311"
 src = ["src", "tests"]
 
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "RUF"]
+ignore = ["RUF022"]  # __all__ is grouped by meaning, not sorted
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B017", "RUF012"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"
 markers = [
     "slow: real (large) model checkpoints",
     "gpu: requires a CUDA device",
 ]
+
+[tool.coverage.run]
+source = ["vistral"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "pragma: no cover"]
+
+[tool.pyright]
+include = ["src"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.11"
+typeCheckingMode = "basic"
+
+[tool.importlinter]
+root_package = "vistral"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "core stays light (D-011)"
+type = "forbidden"
+source_modules = ["vistral.core"]
+forbidden_modules = ["cv2", "torch", "transformers", "supervision", "PIL", "pydantic"]
+allow_indirect_imports = true
+# Function-level (lazy) imports, only executed when the feature is used; runtime import
+# weight is enforced by tests/unit/test_layering.py.
+ignore_imports = [
+    "vistral.core.convert -> torch",
+    "vistral.core.results -> cv2",
+    "vistral.core.results -> supervision",
+    "vistral.core.image -> PIL",
+]
+
+[[tool.importlinter.contracts]]
+name = "core does not depend on higher layers"
+type = "forbidden"
+source_modules = ["vistral.core"]
+forbidden_modules = ["vistral.testing"]
