@@ -3,8 +3,7 @@ import numpy as np
 import pytest
 from PIL import Image as PILImage
 
-import vistral as vt
-from vistral import Color, Frame, Image, ImageSpec, Layout, Range, SourceInfo
+from vistral.core import Color, Frame, Image, ImageSpec, Layout, Range, SourceInfo, vt
 from vistral.core.errors import ConversionError, SpecMismatchError
 
 

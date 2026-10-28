@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import supervision as sv
 
-import vistral as vt
+from vistral.core import vt
 from vistral.core.errors import ConversionError
 from vistral.core.results import is_sv_detections, summarize, transform_result
 from vistral.testing import fixtures as fx

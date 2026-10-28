@@ -3,7 +3,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from vistral import GeoTransform, compose, map_boxes, map_points, to_source_matrix
+from vistral.core import GeoTransform, compose, map_boxes, map_points, to_source_matrix
 
 finite = st.floats(min_value=-500, max_value=500, allow_nan=False, allow_infinity=False)
 positive = st.floats(min_value=0.05, max_value=20, allow_nan=False)

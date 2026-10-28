@@ -419,7 +419,7 @@ def _spec_transform(produces: Any) -> Callable[[ImageSpec], ImageSpec] | None:
 
 
 class FunctionStageFactory:
-    """What ``@vistral.filter`` / ``@vistral.postprocess`` / ``@vistral.stage`` return.
+    """What ``@vt.filter`` / ``@vt.postprocess`` / ``@vt.stage`` return.
 
     Calling it with keyword parameters returns a stage; ``.fn`` is the original function.
     """
@@ -609,7 +609,7 @@ def as_stage(obj: Any) -> Stage:
     if callable(obj):
         raise TypeError(
             f"{getattr(obj, '__name__', obj)!r} is a plain function; decorate it with "
-            "@vistral.filter / @vistral.postprocess / @vistral.stage (or use cv.wrap in M2)"
+            "@vt.filter / @vt.postprocess / @vt.stage (or use cv.wrap in M2)"
         )
     raise TypeError(f"{obj!r} is not a stage")
 

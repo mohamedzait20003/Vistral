@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-import vistral as vt
 from tests import custom_stages as cs
+from vistral.core import vt
 from vistral.testing import fixtures as fx
 from vistral.testing import stubs
 

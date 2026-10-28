@@ -3,7 +3,7 @@
 **Status:** Proposed (planning phase, 2026-10-21). The names and signatures here are the M1–M5 targets. The implementation milestones may refine them, and any change will be recorded in [DECISIONS.md](DECISIONS.md). Everything below is a design, not working code.
 
 Conventions used throughout:
-- `import vistral as vt`, `from vistral import cv, hf, qc`, `import supervision as sv`
+- `from vistral.core import vt` (the one public import, D-023), `from vistral import cv, hf, qc, io`, `import supervision as sv`
 - Sizes are always **(height, width)**. Boxes are absolute **xyxy** float pixels.
 
 ---
@@ -89,13 +89,13 @@ presence = vt.Pipeline([
 
 ### 2.5 Video, batching and streaming
 ```python
-src = vt.io.VideoSource("line3.mp4")                      # cv2.VideoCapture; backend="torchcodec" optional
-sampler = vt.io.FrameSampler(every_n=5)
-sinks = [vt.io.VideoWriter("out.mp4", fps=6), vt.io.JSONSink("results/{source.stem}.jsonl")]
+src = io.VideoSource("line3.mp4")                      # cv2.VideoCapture; backend="torchcodec" optional
+sampler = io.FrameSampler(every_n=5)
+sinks = [io.VideoWriter("out.mp4", fps=6), io.JSONSink("results/{source.stem}.jsonl")]
 for frame in inspect.stream(sampler(src), sinks=sinks, on_error="skip"):
     if frame.errors: log.warning(frame.errors)
 
-frames = inspect.map(vt.io.ImageFolderSource("parts/"), batch_size=8)   # batches where stages support it
+frames = inspect.map(io.ImageFolderSource("parts/"), batch_size=8)   # batches where stages support it
 ```
 
 ### 2.6 Branching and conditional routing
@@ -185,7 +185,8 @@ class RunningBackground(vt.Filter):
 ### 3.7 Testing a custom stage
 ```python
 from vistral.testing import check_stage
-def test_vignette(): check_stage(vignette(strength=0.7), sample=vt.testing.fixtures.bgr_u8(480, 640))
+from vistral.testing import fixtures
+def test_vignette(): check_stage(vignette(strength=0.7), sample=fixtures.bgr_u8(480, 640))
 ```
 
 `check_stage` verifies that:

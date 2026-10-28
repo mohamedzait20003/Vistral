@@ -60,7 +60,7 @@ The core stays general-purpose. The domain sets priorities for built-ins, exampl
 - **G3 Little boilerplate.** A one-line function becomes a stage. Simple operations read like `cv.GaussianBlur(ksize=5)`.
 - **G4 Measurable overhead.** Framework overhead is benchmarked against direct-library baselines and published. It is never assumed to be zero.
 - **G5 Reproducibility.** A result can be traced to its recipe hash, model revisions and package versions.
-- **G6 Light core.** `import vistral` needs neither torch nor transformers (D-011).
+- **G6 Light core.** `from vistral.core import vt` needs neither torch nor transformers (D-011).
 
 ## 6. Non-goals (v1)
 

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from vistral import Accepts, Backend, Color, ImageSpec, Layout, Range
+from vistral.core import Accepts, Backend, Color, ImageSpec, Layout, Range
 from vistral.core.errors import ConfigError, SpecMismatchError
 from vistral.core.spec import consistency_violations, derive_spec, infer_layout, observe
 

@@ -2,8 +2,8 @@
 
 import pytest
 
-import vistral as vt
 from tests import custom_stages as cs
+from vistral.core import vt
 from vistral.testing import check_stage, stubs
 from vistral.testing import fixtures as fx
 

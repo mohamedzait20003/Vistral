@@ -5,7 +5,7 @@ Run:  python examples/m1_quickstart.py
 
 import numpy as np
 
-import vistral as vt
+from vistral.core import vt
 from vistral.testing import stubs
 
 

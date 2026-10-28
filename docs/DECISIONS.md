@@ -7,7 +7,7 @@
 - **Proposed:** recommended in planning, and adopted unless the owner objects.
 - **Open:** still to be resolved.
 
-Last updated: 2026-10-25 (M1 complete).
+Last updated: 2026-10-27 (M1 complete; D-023 and the R14 fix follow-up added before M2).
 
 ---
 
@@ -174,6 +174,11 @@ Last updated: 2026-10-25 (M1 complete).
 ### D-022: `ToSourceCoords` and `Convert` live in core
 - **Status:** Decided (M1)
 - **Decision:** both were moved forward from M2. They depend only on core types (OpenCV is imported lazily for mask warping), and the coordinate-space fault cases need them.
+
+### D-023: One public import, `from vistral.core import vt`
+- **Status:** Decided (user, 2026-10-27, before M2)
+- **Decision:** the public API is the `vt` namespace module `vistral/core/vt.py`, imported as `from vistral.core import vt`. It re-exports everything in `vistral.core` plus the `filter` / `postprocess` / `stage` decorators and `read_image`. `vistral/__init__.py` exports only `__version__`; `import vistral as vt` was removed on purpose so there is one canonical import. Component namespaces stay separate: `from vistral import cv, hf, qc, io`.
+- **Consequences:** error messages and suggestions name `vt.Convert(...)`, `vt.ToSourceCoords()`, `@vt.filter`. `tests/unit/test_layering.py` asserts the facade is light and that the old alias is gone. `vt.py` is the one core module that imports a higher layer (`vistral.io.read_image`); `vistral.io` itself only depends on core and imports OpenCV lazily.
 
 ---
 

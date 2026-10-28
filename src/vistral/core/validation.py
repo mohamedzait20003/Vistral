@@ -160,19 +160,19 @@ def conversion_suggestion(
     if unknown:
         return (
             f"the upstream image leaves {', '.join(unknown)} unknown; declare it "
-            "(e.g. read_image(..., color=...), a stage's produces=...) or insert vistral.Convert"
+            "(e.g. read_image(..., color=...), a stage's produces=...) or insert vt.Convert"
         )
     path = plan(spec, accepts)
     if path:
         return (
-            f"insert vistral.Convert({_fmt_kwargs(convert_kwargs(spec, path))}) before this stage "
+            f"insert vt.Convert({_fmt_kwargs(convert_kwargs(spec, path))}) before this stage "
             f"[{describe_path(path)}], or validate(..., auto_convert=True)"
         )
     lossy = plan(spec, accepts, allow_lossy=True)
     if lossy:
         return (
             f"only a lossy conversion exists [{describe_path(lossy)}]; if that loss is acceptable, "
-            f"insert vistral.Convert({_fmt_kwargs(convert_kwargs(spec, lossy), lossy=True)})"
+            f"insert vt.Convert({_fmt_kwargs(convert_kwargs(spec, lossy), lossy=True)})"
         )
     violations, _ = accepts.check(spec)
     hints = [v.hint for v in violations if v.hint]
@@ -282,6 +282,6 @@ def _check_source_coordinates(stage: Stage, state: ValidationState, ctx: Validat
                 f"but it is in {space} (geometry changed after the source)",
                 stage=ctx.step,
                 index=ctx.index,
-                suggestion="insert vistral.ToSourceCoords() before this stage",
+                suggestion="insert vt.ToSourceCoords() before this stage",
             )
         )

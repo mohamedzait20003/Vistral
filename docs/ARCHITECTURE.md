@@ -47,7 +47,7 @@
   - Exception: `core.results` imports `supervision` only for type references, inside `TYPE_CHECKING`.
 - `vistral.cv` may import cv2 and supervision.
 - `vistral.hf` imports torch and transformers **lazily**, inside `setup()`. If the extra isn't installed it raises `MissingDependencyError("pip install vistral[hf]")`.
-- `import vistral` must succeed with only the core dependencies installed (D-011).
+- `from vistral.core import vt`, the one public import (D-023), must succeed with only the core dependencies installed (D-011).
 
 ---
 
@@ -228,7 +228,7 @@ for stage in stages:
   - Lossy edges: drop_alpha, to_gray, UNIT→U8/U16, U16→U8, f64→f32, f32→f16
   - The torch edges (numpy↔torch via zero-copy `from_numpy`, cpu↔cuda) are registered only when torch is installed.
 - **Normalization is never a conversion edge.** It belongs to encoders, so an image that is already `NORMALIZED` has no path into a stage that expects U8. That is how double normalization gets caught.
-- **Suggestions.** Every error carries a fix: the exact `vistral.Convert(...)` call, a lossy alternative with `allow_lossy=True`, or a hint from the violation.
+- **Suggestions.** Every error carries a fix: the exact `vt.Convert(...)` call, a lossy alternative with `allow_lossy=True`, or a hint from the violation.
 - **Runtime check mode.** With `VISTRAL_DEBUG=1`, `run(check=True)` or `Pipeline(check=True)`, each stage's output is compared with both its declared `produces()` spec and the data itself (dtype, channels, layout, value range for UNIT). Values are cheap to check, but color order can't be detected at runtime, which is why it's tracked as metadata.
 - **HF encoders** declare `accepts = RGB, uint8, HWC` and record `size` so the decoder can supply `target_sizes` (H, W).
 

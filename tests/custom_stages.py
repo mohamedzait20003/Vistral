@@ -4,7 +4,7 @@ from typing import Any
 
 import numpy as np
 
-import vistral as vt
+from vistral.core import vt
 
 
 @vt.filter(accepts={"color": {"BGR", "GRAY"}, "dtype": "uint8"})

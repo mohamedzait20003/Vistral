@@ -174,3 +174,51 @@ def map_boxes(matrix: np.ndarray, xyxy: np.ndarray) -> np.ndarray:
     )
     mapped = map_points(matrix, corners)
     return np.concatenate([mapped.min(axis=1), mapped.max(axis=1)], axis=1)
+
+
+# -- pixel sampling ---------------------------------------------------------------------------
+
+_HALF_PIXEL = np.array([[1.0, 0.0, 0.5], [0.0, 1.0, 0.5], [0.0, 0.0, 1.0]])
+
+
+def pixel_center_matrix(matrix: Any) -> np.ndarray:
+    """Convert a corner-based Vistral matrix to OpenCV's pixel-center convention.
+
+    Vistral maps continuous corner coordinates (pixel ``i`` covers ``[i, i + 1)``, D-009);
+    OpenCV's ``warp*`` functions treat integer coordinates as pixel *centers*. Passing a
+    Vistral matrix straight to OpenCV shifts every non-translation transform by half a pixel
+    (wrong masks after upscaling, flips and rotations). Every OpenCV warp must go through this.
+    """
+    return np.linalg.inv(_HALF_PIXEL) @ np.asarray(matrix, dtype=np.float64) @ _HALF_PIXEL
+
+
+_INTERPOLATION = {"nearest": 0, "linear": 1, "cubic": 2}  # cv2.INTER_* values
+
+
+def warp_array(
+    data: np.ndarray,
+    matrix: Any,
+    size: tuple[int, int],
+    *,
+    interpolation: str = "nearest",
+    border_value: float = 0,
+) -> np.ndarray:
+    """Warp ``data`` with a corner-based ``matrix`` into an image of ``size`` ``(H, W)``.
+
+    Boolean arrays are warped as uint8 and returned as bool. OpenCV is imported lazily.
+    """
+    import cv2
+
+    if interpolation not in _INTERPOLATION:
+        raise ValueError(f"interpolation must be one of {sorted(_INTERPOLATION)}")
+    h, w = size
+    src = data.astype(np.uint8) if data.dtype == bool else data
+    out = cv2.warpPerspective(
+        src,
+        pixel_center_matrix(matrix),
+        (int(w), int(h)),
+        flags=_INTERPOLATION[interpolation],
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=border_value,
+    )
+    return out.astype(bool) if data.dtype == bool else out

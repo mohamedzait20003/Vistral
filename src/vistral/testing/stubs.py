@@ -22,6 +22,20 @@ IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
 
 
+def rasterize_box(box: Sequence[float], size: tuple[int, int]) -> np.ndarray:
+    """Boolean mask of ``box`` (xyxy) in an image of ``size`` ``(H, W)``.
+
+    Uses Vistral's corner convention (D-009): pixel ``i`` is inside ``[a, b)`` when its
+    center ``i + 0.5`` is. This is the ground truth for mask-warping tests.
+    """
+    h, w = size
+    x1, y1, x2, y2 = box
+    xs, ys = np.arange(w) + 0.5, np.arange(h) + 0.5
+    rows = (ys >= y1) & (ys < y2)
+    cols = (xs >= x1) & (xs < x2)
+    return rows[:, None] & cols[None, :]
+
+
 class RGBModelStub(Model):
     """Like most HF/torchvision models: RGB uint8 HWC in, per-channel means out."""
 
@@ -132,10 +146,15 @@ class BoxDetectorStub(Stage):
     writes = "detections"
 
     def __init__(
-        self, boxes: Sequence[Sequence[float]], labels: Sequence[str] | None = None
+        self,
+        boxes: Sequence[Sequence[float]],
+        labels: Sequence[str] | None = None,
+        *,
+        masks: bool = False,
     ) -> None:
         self.boxes = [list(map(float, b)) for b in boxes]
         self.labels = list(labels) if labels is not None else None
+        self.masks = masks
 
     def process(self, frame: Frame) -> Frame:
         import supervision as sv
@@ -146,6 +165,14 @@ class BoxDetectorStub(Stage):
             confidence=np.full(n, 0.9, dtype=np.float32),
             class_id=np.zeros(n, dtype=int),
         )
+        if self.masks:
+            size = frame.image.spec.size
+            assert size is not None
+            det.mask = (
+                np.stack([rasterize_box(b, size) for b in self.boxes])
+                if n
+                else (np.zeros((0, *size), dtype=bool))
+            )
         if self.labels is not None:
             det.data["class_name"] = np.array(self.labels)
         frame.results[self.writes or "detections"] = stamp(det, frame, producer=self.name)

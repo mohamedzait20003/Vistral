@@ -20,14 +20,14 @@ M1 provides:
 - a contract-test kit for your own components (`vistral.testing.check_stage`).
 
 ```python
-import vistral as vt
+from vistral.core import vt
 from vistral.testing import stubs   # stand-ins until real OpenCV/HF stages land in M2/M3
 
 pipe = vt.Pipeline([stubs.RGBModelStub()])
 pipe.validate(vt.ImageSpec.bgr_u8())
 # SpecMismatchError: stage 0 'RGBModelStub' does not accept BGR uint8 HWC U8 ...
 #   - color=BGR (allowed: {RGB})
-#   Fix: insert vistral.Convert(color='RGB') before this stage [swap_rb], ...
+#   Fix: insert vt.Convert(color='RGB') before this stage [swap_rb], ...
 ```
 
 ## Target API (later milestones)
@@ -42,7 +42,7 @@ Its main focus is **industrial and production inspection and QC**.
 
 ```python
 # Design only — cv, hf and qc arrive in M2–M4
-import vistral as vt
+from vistral.core import vt
 from vistral import cv, hf, qc
 
 inspect = vt.Pipeline([

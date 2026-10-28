@@ -21,12 +21,14 @@
 1. ✅ A pure-NumPy pipeline runs and produces a per-stage trace (`tests/unit/test_pipeline.py`).
 2. ✅ `validate()` catches all 13 validation-time cases in the fault corpus, and every error carries a suggested fix. The 2 runtime cases are caught in check mode or by the always-on accepts check (`tests/unit/test_validation.py`).
 3. ✅ `auto_convert=True` inserts the cheapest lossless path and reports it. Lossy paths need `allow_lossy=True` (D-019).
-4. ✅ `import vistral` loads no cv2, torch, transformers, supervision, PIL or pydantic (`tests/unit/test_layering.py`). Both import-linter contracts are kept.
+4. ✅ `from vistral.core import vt` loads no cv2, torch, transformers, supervision, PIL or pydantic (`tests/unit/test_layering.py`). Both import-linter contracts are kept.
 5. ✅ Every built-in and test stage round-trips through JSON `get_config()` → `stage_from_config()` to an equal stage (`tests/contract/test_contracts.py`, 20 stages through `check_stage`).
 6. ✅ Core coverage is 96% (line + branch); the gate is ≥90%.
 7. ✅ `sv.Classifications` / `sv.KeyPoints` were checked, and Vistral uses its own types (D-017).
 
 **Exit:** 192 tests pass and 1 is skipped (the torch-only zero-copy test). This was checked locally on Python 3.14.5 / numpy 2.5.4 / OpenCV 5.0.0 and on the floor, Python 3.11.16 / numpy 1.26.4 / OpenCV 4.10.0. ruff, pyright and import-linter are clean. The CI workflow (`.github/workflows/ci.yml`) encodes the full matrix, but there is no GitHub remote yet, so it has not run in GitHub Actions.
+
+**Follow-up before M2 (2026-10-27):** the mask-warp fix now lives in one helper, `geometry.warp_array`, backed by ground-truth tests (R14). The public import is now `from vistral.core import vt` (D-023). The suite has 216 tests.
 
 **Deviations from the plan:** `ToSourceCoords` and `Convert` moved forward from M2 into core (D-022). `ImageSpec` gained a `backend` field. `Accepts` is its own type (D-020). `read_image` already decodes files through OpenCV, using lazy import and `imdecode`, so non-ASCII Windows paths work.
 
@@ -50,7 +52,7 @@
   1. A pure-NumPy pipeline of 3 function filters runs and produces a trace.
   2. `validate()` catches 100% of the non-HF fault-corpus cases, and the error message suggests a fix.
   3. `auto_convert=True` inserts the minimal conversion path, which is reported.
-  4. `import vistral` works with only core dependencies; the import-linter enforces the layering rules ([ARCHITECTURE.md §2](ARCHITECTURE.md)).
+  4. `from vistral.core import vt` works with only core dependencies; the import-linter enforces the layering rules ([ARCHITECTURE.md §2](ARCHITECTURE.md)).
   5. Every stage's `get_config()` serializes to JSON and reconstructs an equal stage.
   6. ≥90% line coverage on `vistral.core`.
   7. Checked and recorded in DECISIONS.md: whether `sv.Classifications` and `sv.KeyPoints` fit as result types.

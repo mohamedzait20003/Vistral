@@ -1,4 +1,4 @@
-"""Architecture rule (D-011): importing vistral must not import heavy optional dependencies."""
+"""Architecture rules: the public import (D-023) is light (D-011) and is the only entry point."""
 
 import subprocess
 import sys
@@ -16,13 +16,37 @@ def test_import_vistral_is_light():
     assert _loaded_after("import vistral") == []
 
 
-def test_import_core_is_light():
-    assert _loaded_after("import vistral.core") == []
+def test_public_import_is_light():
+    assert _loaded_after("from vistral.core import vt") == []
 
 
 def test_running_a_numpy_pipeline_stays_light():
     statement = (
-        "import numpy as np, vistral as vt; "
+        "import numpy as np; from vistral.core import vt; "
         "(vt.Convert(color='RGB') | vt.Convert(layout='CHW'))(np.zeros((4, 4, 3), np.uint8))"
     )
     assert _loaded_after(statement) == []
+
+
+def test_vt_is_the_only_public_namespace():
+    import vistral
+    from vistral.core import vt
+
+    assert vistral.__all__ == ["__version__"]
+    assert not hasattr(vistral, "Pipeline")  # `import vistral as vt` is intentionally gone
+    assert vt.__version__ == vistral.__version__
+    for name in (
+        "Pipeline",
+        "Convert",
+        "ToSourceCoords",
+        "filter",
+        "postprocess",
+        "stage",
+        "read_image",
+        "ImageSpec",
+        "Accepts",
+        "Branch",
+        "When",
+    ):
+        assert name in vt.__all__ and hasattr(vt, name), name
+    assert all(hasattr(vt, name) for name in vt.__all__)

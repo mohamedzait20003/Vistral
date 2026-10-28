@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Self
 import numpy as np
 
 from vistral.core.errors import ConversionError
-from vistral.core.geometry import GeoTransform, map_boxes, map_points
+from vistral.core.geometry import GeoTransform, map_boxes, map_points, warp_array
 
 if TYPE_CHECKING:
     from vistral.core.frame import Frame
@@ -219,15 +219,9 @@ class Keypoints(Result):
 
 
 def _warp_label_map(label_map: np.ndarray, matrix: np.ndarray, size: tuple[int, int]) -> np.ndarray:
-    import cv2
-
-    h, w = size
-    src = label_map.astype(np.uint8) if label_map.dtype == bool else label_map
-    # Vistral matrices are corner-based (D-009); OpenCV samples at pixel centers.
-    shift = np.array([[1, 0, 0.5], [0, 1, 0.5], [0, 0, 1]])
-    centered = np.linalg.inv(shift) @ np.asarray(matrix, dtype=np.float64) @ shift
-    out = cv2.warpPerspective(src, centered, (w, h), flags=cv2.INTER_NEAREST)
-    return out.astype(bool) if label_map.dtype == bool else out
+    # Nearest-neighbour keeps label ids and mask values exact; warp_array handles the
+    # corner- vs center-based pixel convention (D-009, risk R14).
+    return warp_array(label_map, matrix, size, interpolation="nearest")
 
 
 @dataclass(frozen=True, eq=False)
@@ -359,7 +353,7 @@ def transform_result(result: Any, matrix: np.ndarray, size: tuple[int, int]) -> 
         return out
     raise ConversionError(
         f"don't know how to map the coordinates of {type(result).__name__}; "
-        "subclass vistral.Result and implement transform_coords()"
+        "subclass vt.Result and implement transform_coords()"
     )
 
 

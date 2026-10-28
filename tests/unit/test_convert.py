@@ -1,8 +1,7 @@
 import numpy as np
 import pytest
 
-import vistral as vt
-from vistral import Accepts, Color, Image, ImageSpec, Layout, Range
+from vistral.core import Accepts, Color, Image, ImageSpec, Layout, Range, vt
 from vistral.core.convert import DEFAULT_GRAPH, ConversionGraph, describe_path
 from vistral.core.errors import ConversionError
 from vistral.testing import fixtures as fx
